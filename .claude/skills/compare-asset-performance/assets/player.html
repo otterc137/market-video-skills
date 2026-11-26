@@ -1,0 +1,95 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Asset performance</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#121314;color:#f1f0ee;font:16px system-ui,sans-serif}main{width:min(100%,1280px);padding:clamp(15px,3.1vw,42px)}header,.controls,.metrics,.tabs{display:flex;align-items:center;gap:12px}header{justify-content:space-between;flex-wrap:wrap}h1{font-size:clamp(25px,3.3vw,46px);font-weight:550;letter-spacing:-.05em;margin:0}p{color:#aaa;margin:.35em 0}.tabs{gap:3px;background:#202122;padding:4px;border-radius:10px}button{font:inherit;color:#ccc;border:0;border-radius:7px;background:transparent;padding:7px 12px;cursor:pointer}button[aria-pressed=true],#play{background:#353637;color:#fff}.metrics{flex-wrap:wrap;gap:clamp(16px,4vw,56px);margin:22px 0 8px}.metric{display:grid;grid-template-columns:auto auto;align-items:center;gap:3px 8px}.dot{width:9px;height:9px;border-radius:100%}.metric b{font-weight:550}.metric output{grid-column:2;font:500 clamp(17px,2.25vw,30px) ui-monospace,monospace;letter-spacing:-.06em}.plot{background:#191a1b;border:1px solid #333536;border-radius:16px;overflow:hidden}svg{width:100%;display:block}.controls{margin-top:16px}.controls input{min-width:30px;flex:1;accent-color:#cdd1d2}.controls time{font:14px ui-monospace,monospace;white-space:nowrap}.controls button{min-width:84px}.metric small{display:block;font:12px system-ui;color:#aaa}.metric output{white-space:pre}.digit{display:inline-block;height:1em;line-height:1em;overflow:hidden;vertical-align:top;text-align:center;width:1ch;font-family:GeistMono,ui-monospace,monospace;letter-spacing:0}.rail,.rail>span{display:block;height:1em;line-height:1em}.rail{transform:translateY(var(--shift))}svg text{font:14px system-ui,sans-serif;fill:#aaa}button:focus-visible,input:focus-visible{outline:2px solid #83d7e9}@media(max-width:600px){main{padding:12px}.metrics{margin:14px 0}.controls{gap:8px}.controls time{font-size:12px}.tabs button{padding:5px 8px}}
+__VIDEO_CSS__
+</style>
+<main><header><div><h1>Cumulative return</h1><p id="period"></p></div><div class="tabs"><button id="full">Full period</button><button id="week">This week</button></div></header><div class="metrics" id="metrics"></div><div class="plot"><svg role="img" aria-label="Cumulative adjusted-close returns with moving asset markers" id="chart"></svg></div><div class="controls"><button id="play">Pause</button><input type="range" id="seek" min="0" step="any" aria-label="Chart playhead"><time id="date"></time></div></main>
+<script>__NUMBER_FLOW__</script>
+<script type="application/json" id="data">__DATA__</script>
+<script>
+const D=JSON.parse(document.querySelector('#data').textContent),get=id=>document.getElementById(id);
+const svg=get('chart'), ns='http://www.w3.org/2000/svg', dateFormat=new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});
+function node(tag,attrs,parent=svg){let n=document.createElementNS(ns,tag);for(let [k,v] of Object.entries(attrs))n.setAttribute(k,v);parent.append(n);return n}
+function showDate(s){return dateFormat.format(new Date(s+'T00:00:00Z'))}
+const dollars=D.values,days=D.dates,series=D.symbols;
+const isVideo=!new URLSearchParams(location.search).has('review');
+document.body.classList.toggle('video',isVideo);
+document.body.classList.toggle('many',D.symbols.length>3);
+const narrow=()=>!isVideo&&innerWidth<600;
+let first=0,last=days.length-1,pos=0,mode='full',running=false,ended=false,raf=0,prior=0,marks=[],X,Y,rows,duration,stops=[];
+function toggle(on){cancelAnimationFrame(raf);running=on;get('play').textContent=on?'Pause':ended?'Replay':'Play';prior=0;if(on)raf=requestAnimationFrame(tick)}
+function tick(t){if(prior)draw(Math.min(last,pos+(t-prior)*(last-first)/duration));prior=t;if(pos>=last){ended=true;toggle(false)}else raf=requestAnimationFrame(tick)}
+function init(which,auto=true){
+ toggle(false);mode=which;first=which==='week'?D.weekStart:0;duration=which==='week'?5500:12500;
+ const segments=Math.min(last-first,which==='week'?6:10);
+ stops=Array.from({length:segments+1},(_,j)=>first+Math.round(j*(last-first)/segments));
+ for(let k of ['week','full'])get(k).setAttribute('aria-pressed',String(k===which));
+ document.querySelector('h1').textContent=which==='week'?'Week-to-date return':'Cumulative return';
+ get('period').textContent=showDate(days[first])+' – '+showDate(days[last])+' · Adjusted close';
+ get('seek').min=first;get('seek').max=last;get('metrics').replaceChildren();svg.replaceChildren();
+ let W=narrow()?560:1120,H=isVideo?440:narrow()?395:365,L=narrow()?64:72,R=W-47,T=27,B=H-44;
+ svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+ rows=series.map((s,i)=>dollars[i].map(v=>100*(v/dollars[i][first]-1)));
+ let flat=rows.flatMap(v=>v.slice(first)),lo=Math.min(0,...flat),hi=Math.max(0,...flat);
+ let target=(hi-lo||1)/4,m=10**Math.floor(Math.log10(target)),step=([1,2,2.5,5,10].find(v=>v*m>=target)||10)*m;
+ lo=Math.floor(lo/step)*step;hi=Math.ceil(hi/step)*step;if(hi===lo)hi+=step;
+ X=i=>L+(R-L)*(i-first)/(last-first);Y=v=>B-(v-lo)*(B-T)/(hi-lo);
+ for(let j=0;j<=Math.round((hi-lo)/step);j++){let v=lo+j*step,y=Y(v);node('line',{x1:L,x2:R,y1:y,y2:y,stroke:Math.abs(v)<1e-9?'#717476':'#303233'});node('text',{x:L-9,y:y+5,'text-anchor':'end'}).textContent=+v.toFixed(3)+'%'}
+ let count=Math.min(last-first+1,narrow()?3:5);
+ for(let j=0;j<count;j++){let i=first+Math.round(j*(last-first)/(count-1));node('text',{x:X(i),y:B+27,'text-anchor':j===0?'start':j===count-1?'end':'middle'}).textContent=new Date(days[i]+'T00:00:00Z').toLocaleDateString('en-US',which==='week'?{month:'short',day:'numeric',timeZone:'UTC'}:{month:'short',year:'2-digit',timeZone:'UTC'})}
+ const defs=node('defs',{}),clip=node('clipPath',{id:'reveal'},defs),mask=node('rect',{x:L-2,y:0,width:2,height:H},clip);
+ marks=series.map((s,i)=>{
+  const color=D.colors[i],edge=D.edges[i],metric=document.createElement('div');metric.className='metric';metric.innerHTML='<span class="dot"></span><b></b><output></output>';metric.children[0].style.background=color;metric.children[0].style.boxShadow='0 0 0 1px '+edge;if(D.logos[i]&&isVideo)metric.children[0].style.backgroundImage='url('+D.logos[i]+')';metric.children[1].textContent=s;metric.style.setProperty('--return-columns',Math.max(...rows[i].slice(first).map(v=>Math.abs(v).toFixed(2).length))+2);get('metrics').append(metric);
+  const path=rows[i].slice(first).map((v,k)=>(k?'L':'M')+X(k+first).toFixed(2)+','+Y(v).toFixed(2)).join(' ');
+  node('path',{d:path,fill:'none',stroke:edge,'stroke-width':4.2,'clip-path':'url(#reveal)'});
+  node('path',{d:path,fill:'none',stroke:color,'stroke-width':2.3,'clip-path':'url(#reveal)'});
+  return {color,edge,metric:metric.lastElementChild,mask}
+ });
+ marks.forEach((m,i)=>{
+  m.leader=node('line',{stroke:m.color,'stroke-width':1.15});m.dot=node('circle',{r:3,fill:m.color});m.badge=node('g',{});
+  node('circle',{r:18,fill:'#202224',stroke:m.edge,'stroke-width':1.8},m.badge);
+  if(D.logos[i]){let c=node('clipPath',{id:'logo'+i},defs);node('circle',{r:14.5},c);node('image',{href:D.logos[i],x:-14.5,y:-14.5,width:29,height:29,'clip-path':'url(#logo'+i+')'},m.badge)}
+  else node('text',{x:0,y:4,'text-anchor':'middle',style:'font-size:9px;fill:white'},m.badge).textContent=series[i].slice(0,3);
+ });
+ draw(first);if(auto)toggle(true)
+}
+function pct(v){return (v>0?'+':'')+v.toFixed(2)+'%'}
+function roll(el,oldValue,newValue,t){
+ let flow=el.firstElementChild;
+ if(!flow){
+  flow=document.createElement('number-flow');
+  flow.locales='en-US';flow.format={minimumFractionDigits:2,maximumFractionDigits:2,useGrouping:false};
+  flow.numberSuffix='%';flow.spinTiming=flow.transformTiming={duration:620,easing:'cubic-bezier(.22, .68, 0, 1)'};
+  flow.opacityTiming={duration:240,easing:'ease-out'};
+  flow.willChange=false;el.append(flow);
+ }
+ const key=oldValue+'|'+newValue;
+ if(el.dataset.key!==key){
+  flow.animated=false;flow.numberPrefix=oldValue>0?'+':'';flow.update(oldValue);
+  flow.animated=true;flow.numberPrefix=newValue>0?'+':'';flow.update(newValue);
+  el.dataset.key=key;
+ }
+ for(const animation of flow.shadowRoot.getAnimations()){
+  animation.pause();animation.currentTime=t*620;
+ }
+ el.setAttribute('aria-label',pct(t>=1?newValue:oldValue));
+}
+function draw(p){
+ pos=p;ended=p>=last;let k=Math.floor(p),u=p-k,x=X(p);
+ let points=marks.map((m,i)=>{let a=rows[i][k],b=rows[i][Math.min(k+1,last)],v=a+(b-a)*u;return {m,i,y:Y(v),v}}).sort((a,b)=>a.y-b.y);
+ let maxY=+svg.viewBox.baseVal.height-47,prev=0;for(let a of points){a.by=Math.max(a.y,prev+38,20);prev=a.by}
+ for(let j=points.length-1;j>=0;j--){points[j].by=Math.min(points[j].by,maxY);maxY=points[j].by-38}
+ for(let {m,y,by,v} of points){m.mask.setAttribute('width',x-X(first)+2);m.dot.setAttribute('cx',x);m.dot.setAttribute('cy',y);m.leader.setAttribute('x1',x);m.leader.setAttribute('x2',x+10);m.leader.setAttribute('y1',y);m.leader.setAttribute('y2',by);m.badge.setAttribute('transform',`translate(${x+16},${by})`);const id=marks.indexOf(m),j=stops.findIndex(n=>n>p);
+ if(j<0)roll(m.metric,rows[id][last],rows[id][last],1);
+ else{const a=stops[j-1],b=stops[j],span=Math.min((b-a)*.82,(last-first)*.62/(mode==='week'?4:6.5));
+ roll(m.metric,rows[id][a],rows[id][b],Math.max(0,1-(b-p)/span))}}
+ get('date').textContent=showDate(days[k]);get('seek').value=p
+}
+get('week').disabled=D.weekStart===null;
+get('week').onclick=()=>init('week');get('full').onclick=()=>init('full');
+get('play').onclick=()=>{if(!running&&ended)draw(first);toggle(!running)};
+get('seek').oninput=e=>{toggle(false);draw(Math.round(Number(e.target.value)));toggle(false)};
+window.setComparisonFrame=(fraction,period)=>{if(period!==mode)init(period,false);toggle(false);draw(first+(last-first)*Math.min(1,Math.max(0,fraction)))};
+window.addEventListener('resize',()=>{let p=pos,on=running;init(mode,false);draw(p);toggle(on)});
+init(location.hash!=='#full'&&D.weekStart!==null?'week':'full',!matchMedia('(prefers-reduced-motion: reduce)').matches);if(!running){draw(last);toggle(false)}
+</script></html>

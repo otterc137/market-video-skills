@@ -1,0 +1,1 @@
+{"name":"market-video-skills","version":"1.0.0","private":true,"engines":{"node":">=22.12.0"},"dependencies":{"puppeteer-core":"25.18.1"}}

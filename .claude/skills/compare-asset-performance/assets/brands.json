@@ -1,0 +1,20 @@
+{
+  "NVDA": {
+    "logo": "logos/nvidia.svg",
+    "accent": "#76B900",
+    "source": "https://s3-symbol-logo.tradingview.com/nvidia.svg",
+    "name": "NVIDIA"
+  },
+  "MU": {
+    "logo": "logos/micron-technology.svg",
+    "accent": "#104076",
+    "source": "https://s3-symbol-logo.tradingview.com/micron-technology.svg",
+    "name": "Micron"
+  },
+  "BRK-B": {
+    "logo": "logos/berkshire-hathaway.svg",
+    "accent": "#2B3191",
+    "source": "https://s3-symbol-logo.tradingview.com/berkshire-hathaway.svg",
+    "name": "Berkshire Hathaway"
+  }
+}
